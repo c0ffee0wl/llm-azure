@@ -5,7 +5,7 @@ import click
 import llm
 import yaml
 from llm import EmbeddingModel, hookimpl
-from llm.default_plugins.openai_models import AsyncChat, Chat, _Shared, not_nulls
+from llm.default_plugins.openai_models import AsyncChat, Chat, _Shared, not_nulls, combine_chunks
 from openai import AsyncAzureOpenAI, AzureOpenAI
 from llm.utils import remove_dict_none_values
 
@@ -43,19 +43,26 @@ def register_models(register):
         if model.get('embedding_model'):
             continue
 
-        needs_key = model.get("needs_key", DEFAULT_KEY_ALIAS)
-        key_env_var = model.get("key_env_var", DEFAULT_KEY_ENV_VAR)
+        # Use .pop() to remove these keys from the model dictionary
+        # before it's unpacked with **model
+        needs_key = model.pop("needs_key", DEFAULT_KEY_ALIAS)
+        key_env_var = model.pop("key_env_var", DEFAULT_KEY_ENV_VAR)
         # The 'aliases' key is popped here to prevent it from being passed as a model parameter.
         # Other new parameters (vision, audio, reasoning, allows_system_prompt) are left in
         # the 'model' dictionary to be passed via **model to the AzureChat constructor.
         aliases = model.pop("aliases", [])
+
+        # Instantiate the models before registering them
+        chat_model = AzureChat(needs_key=needs_key, key_env_var=key_env_var, **model)
+        async_chat_model = AzureAsyncChat(needs_key=needs_key, key_env_var=key_env_var, **model)
+
         # Pass all relevant model parameters directly to AzureChat/AzureAsyncChat
         # This assumes the model dict contains 'model_id', 'model_name', 'api_base', 'api_version'
         # and optionally 'attachment_types', 'can_stream', and the new vision, audio, reasoning,
         # and allows_system_prompt parameters.
         register(
-            AzureChat(needs_key=needs_key, key_env_var=key_env_var, **model),
-            AzureAsyncChat(needs_key=needs_key, key_env_var=key_env_var, **model),
+            chat_model,
+            async_chat_model,
             aliases=aliases,
         )
 
@@ -70,8 +77,8 @@ def register_embedding_models(register):
         if not model.get('embedding_model'):
             continue
 
-        needs_key = model.get("needs_key", DEFAULT_KEY_ALIAS)
-        key_env_var = model.get("key_env_var", DEFAULT_KEY_ENV_VAR)
+        needs_key = model.pop("needs_key", DEFAULT_KEY_ALIAS)
+        key_env_var = model.pop("key_env_var", DEFAULT_KEY_ENV_VAR)
         aliases = model.pop("aliases", [])
         model.pop('embedding_model') # Remove the flag before passing to constructor
 
@@ -83,23 +90,23 @@ def register_embedding_models(register):
 
 class AzureShared(_Shared):
     def __init__(self, model_id, model_name, api_base, api_version, attachment_types=None, can_stream=True, needs_key: str = DEFAULT_KEY_ALIAS, key_env_var: str = DEFAULT_KEY_ENV_VAR, vision=False, audio=False, reasoning=False, allows_system_prompt=True, **kwargs):
-        # The base _Shared class expects model_id and possibly can_stream, and other kwargs.
-        # We now explicitly pass vision, audio, reasoning, and allows_system_prompt to the base class.
+        self.attachment_types = attachment_types or set()
+        self.needs_key = needs_key  # Store it here
+        self.key_env_var = key_env_var  # Store it here
+
+        # Pass ALL relevant parameters, including api_base and api_version, to the base _Shared class
         super().__init__(
             model_id=model_id,
             model_name=model_name,
             can_stream=can_stream,
-            needs_key=needs_key,
-            key_env_var=key_env_var,
             vision=vision,
             audio=audio,
             reasoning=reasoning,
             allows_system_prompt=allows_system_prompt,
+            api_base=api_base,
+            api_version=api_version,
             **kwargs
         )
-        self.api_base = api_base
-        self.api_version = api_version
-        self.attachment_types = attachment_types or set()
 
     def get_client(self, key, *, async_=False):
         kwargs = {
@@ -127,7 +134,7 @@ class AzureShared(_Shared):
             kwargs["stream_options"] = {"include_usage": True}
         return kwargs
 
-    def execute(self, prompt, stream, response, conversation=None, async_override=False):
+    def execute(self, prompt, stream, response, conversation=None, key=None, async_override=False):
         messages = []
         current_system = None
 
@@ -177,7 +184,7 @@ class AzureShared(_Shared):
 
         response._prompt_json = {"messages": messages}
         kwargs = self.build_kwargs(prompt, stream)
-        client = self.get_client(key=None, async_=async_override) # key=None will make it use self.get_key() internally
+        client = self.get_client(key=key, async_=async_override) # key is now passed
 
         if async_override:
             async def async_generator():
@@ -190,10 +197,10 @@ class AzureShared(_Shared):
                 chunks = []
                 async for chunk in completion:
                     chunks.append(chunk)
-                    content = self.combine_chunks(chunks)
-                    yield content
+                    content = combine_chunks(chunks)
+                    yield content["content"] # Changed this line
                 response.response_json = remove_dict_none_values(
-                    self.combine_chunks(chunks, usage=True)
+                    combine_chunks(chunks)
                 )
                 response.usage = response.response_json.get("usage")
             return async_generator()
@@ -208,10 +215,10 @@ class AzureShared(_Shared):
                 chunks = []
                 for chunk in completion:
                     chunks.append(chunk)
-                    content = self.combine_chunks(chunks)
-                    yield content
+                    content = combine_chunks(chunks)
+                    yield content["content"] # Changed this line
                 response.response_json = remove_dict_none_values(
-                    self.combine_chunks(chunks, usage=True)
+                    combine_chunks(chunks)
                 )
                 response.usage = response.response_json.get("usage")
             else:
@@ -225,17 +232,14 @@ class AzureChat(AzureShared, Chat):
         # and passes them up to the base _Shared (and thus Chat) class.
         super().__init__(*args, **kwargs)
 
-    def execute(self, prompt, stream, response, conversation=None):
-        yield from super().execute(prompt, stream, response, conversation, async_override=False)
-
 
 class AzureAsyncChat(AzureShared, AsyncChat):
     def __init__(self, *args, **kwargs):
         # AzureAsyncChat also correctly inherits from AzureShared.
         super().__init__(*args, **kwargs)
 
-    async def execute(self, prompt, stream, response, conversation=None):
-        async for chunk in await super().execute(prompt, stream, response, conversation, async_override=True):
+    async def execute(self, prompt, stream, response, conversation=None, key=None):
+        async for chunk in await super().execute(prompt, stream, response, conversation, key=key, async_override=True):
             yield chunk
 
 
@@ -278,4 +282,3 @@ def _attachment(attachment):
                 "format": format_,
             },
         }
-

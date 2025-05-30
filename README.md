@@ -10,8 +10,14 @@ LLM access to the Azure OpenAI SDK
 
 Install this plugin in the same environment as [LLM](https://llm.datasette.io/).
 
+Because this plugin is a community fork, it is not published under the upstream project's name.  Therefore to run this fork, you must ]manually install the plugin as a plugin developer would](https://llm.datasette.io/en/stable/plugins/tutorial-model-plugin.html#installing-your-plugin-to-try-it-out):
+
+
 ```bash
-llm install llm-azure
+git clone https://github.com/bexelbie/llm-azure.git
+cd llm-azure
+llm install -e .
+# llm install llm-azure
 ```
 
 ## Usage
@@ -23,83 +29,33 @@ llm keys set azure
 # Paste key here
 ```
 
-To add the `gpt-4-32k` chat model, and embedding model `text-embedding-3-small` deployed in your Azure Subscription, add this to your `azure/config.yaml` file:
+### Configuration
 
-```yaml
-- model_id: gpt-4-32k
-  model_name: gpt-4-32k
-  api_base: https://deployment.openai.azure.com/
-  api_version: '2023-05-15'
+To register Azure OpenAI models with LLM, you need to create a configuration file. This file should be named `config.yaml` and placed in the `azure` directory within your LLM configuration folder.
 
-- model_id: text-embedding-3-small
-  embedding_model: true
-  model_name: text-embedding-3-small
-  api_base: https://deployment.openai.azure.com/
-  api_version: '2023-05-14'
-```
-
-The configuration file should be in the `azure` directory in the config of your `llm` installation.
-Run this command to find the location of the config file:
+You can find the location of this directory and open the file using these commands:
 
 ```bash
 llm azure config-file
-```
-
-or you can open the file with:
-
-```bash
+# or to open directly:
 open "$(llm azure config-file)"
 ```
 
-The `model_id` is the name LLM will use for the model. The `model_name` is the name which needs to be passed to the API - this might differ from the `model_id`, especially if `model_id` could potentially clash with other installed models.
+The `config.yaml` file should contain a list of model configurations. Each entry defines a model and its properties.
 
-### Attachments
+**For comprehensive examples and detailed explanations of all available configuration options, please refer to the `example-config.yaml` file in this repository.** This file demonstrates how to configure:
 
-To enable the `-a` flag for models that support multi-modal input (like image or audio attachments), add an `attachment_types` section to your `config.yaml` with the desired MIME types (subject to the underlying model's support). Expanding on the example above, your `config.yaml` would now look like this:
+*   **Chat Models:** Basic setup, streaming, multi-modal input (attachments), vision, audio, reasoning, and system prompt capabilities.
+*   **Embedding Models:** How to register models for embeddings.
+*   **Custom API Keys:** Using different API key aliases or environment variables for specific models.
 
-```yaml
-- model_id: gpt-4-32k
-  model_name: gpt-4-32k # Corrected from deployment_name
-  api_base: https://deployment.openai.azure.com/
-  api_version: '2023-05-15'
-  attachment_types:
-    - "image/png"
-    - "image/jpeg"
-    - "audio/wav"
-    - "audio/mp3"
-```
+The `model_id` is the name LLM will use for the model (e.g., `llm -m <model_id>`). The `model_name` is the name of your deployment in Azure OpenAI Studio, which is passed to the API.
 
-### Streaming
+# Fork Notes
 
-For models that can stream responses, add `can_stream: true` to their configuration:
-
-```yaml
-- model_id: gpt-4-32k
-  model_name: gpt-4-32k
-  api_base: https://deployment.openai.azure.com/
-  api_version: '2023-05-15'
-  can_stream: true
-```
-
-### Customizing API Key Configuration
-
-By default, `llm-azure` models will look for an API key aliased as `azure` (from `llm keys set azure`) or in the `AZURE_OPENAI_API_KEY` environment variable. You can override these defaults for individual models by adding `needs_key` and `key_env_var` to your `config.yaml` entry. This is useful if you manage multiple Azure subscriptions or different sets of API keys.
-
-For example, to configure a model to use a key aliased as `my-other-azure-key` (set via `llm keys set my-other-azure-key`) or from an environment variable named `MY_AZURE_API_KEY`:
-
-```yaml
-- model_id: my-special-gpt
-  model_name: my-deployment-name
-  api_base: https://your_other_[deployment.openai.azure.com/](https://deployment.openai.azure.com/)
-  api_version: '2023-05-15'
-  needs_key: my-other-azure-key
-  key_env_var: MY_AZURE_API_KEY
-
-- model_id: another-embedding
-  embedding_model: true
-  model_name: other-embedding-deployment
-  api_base: https://your_other_[deployment.openai.azure.com/](https://deployment.openai.azure.com/)
-  api_version: '2023-05-14'
-  needs_key: my-other-azure-key
-  key_env_var: MY_AZURE_API_KEY
-```
+This fork brings `llm-azure` up-to-date with community proposed patches and forks. Specifically, this fork has currently folded in changes proposed or made by:
+https://github.com/kj9/llm-azure - config file management and cli improvements
+https://github.com/kmad0/llm-azure - Add attachment support for Azure chat models
+https://github.com/While the patch in laszlovandenhoek/llm-azure wasn't needed, it did inspire an update to the README for can_stream
+https://github.com/0gust1/llm-azure - allow for selective overriding of Azure API Keys for differing deployments
+https://github.com/jonasherfot/llm-azure - support vision, audio, reasoning, and system prompt capabilities

@@ -1,23 +1,91 @@
-# Vision-enabled model example
-- model_id: az-gpt-4o
-  deployment_name: gpt-4o
-  endpoint: "https://your-resource.openai.azure.com/"
+# This file provides comprehensive examples for configuring Azure OpenAI models with llm-azure.
+# To use these examples, copy the relevant sections into your llm-azure config file,
+# which is typically located at: "$(llm azure config-file)"
+
+# --- Chat Models ---
+
+# 1. Basic Chat Model Configuration
+#    - model_id: The name you will use to refer to this model with `llm -m <model_id>`.
+#    - model_name: The name of your deployment in Azure OpenAI Studio. This is passed to the API.
+#    - api_base: The base URL for your Azure OpenAI resource (e.g., "https://your-resource.openai.azure.com/").
+#    - api_version: The API version to use (e.g., "2023-05-15").
+#    - aliases: (Optional) A list of shorter names you can use for convenience (e.g., `llm -m az4`).
+- model_id: az-gpt-4-basic
+  model_name: gpt-4-deployment
+  api_base: "https://your-resource.openai.azure.com/"
+  api_version: "2023-05-15"
+  aliases: ["az4"]
+
+# 2. Chat Model with Streaming Enabled
+#    Add `can_stream: true` to enable streaming responses, which provides output word-by-word.
+- model_id: az-gpt-4-stream
+  model_name: gpt-4-stream-deployment
+  api_base: "https://your-resource.openai.azure.com/"
+  api_version: "2023-05-15"
+  can_stream: true
+
+# 3. Chat Model with Multi-modal Input (Attachments)
+#    For models supporting multi-modal input (e.g., images, audio), specify `attachment_types`
+#    with a list of supported MIME types.
+#    - vision: Set to `true` if the model supports image input.
+#    - audio: Set to `true` if the model supports audio input.
+- model_id: az-gpt-4o-vision-audio
+  model_name: gpt-4o-deployment
+  api_base: "https://your-resource.openai.azure.com/"
   api_version: "2025-01-01-preview"
   aliases: ["az4o"]
   vision: true
-
-# Audio-enabled model example
-- model_id: az-gpt-4o-audio
-  deployment_name: gpt-4o-audio-preview
-  endpoint: "https://your-resource.openai.azure.com/"
-  api_version: "2025-01-01-preview"
-  aliases: ["az4o-audio"]
   audio: true
+  attachment_types:
+    - "image/png"
+    - "image/jpeg"
+    - "audio/wav"
+    - "audio/mp3"
 
-# Reasoning model example
-- model_id: az-o3-mini
-  deployment_name: o3-mini
-  endpoint: "https://your-resource.openai.azure.com/"
+# 4. Chat Model with Reasoning Capability
+#    Add `reasoning: true` for models specifically optimized for reasoning tasks.
+- model_id: az-o3-mini-reasoning
+  model_name: o3-mini-deployment
+  api_base: "https://your-resource.openai.azure.com/"
   api_version: "2025-01-01-preview"
-  aliases: ["azo3-mini"]
-  reasoning: true 
+  reasoning: true
+
+# 5. Chat Model Allowing System Prompts
+#    Add `allows_system_prompt: true` if the model supports a dedicated system prompt.
+#    Most modern chat models support this.
+- model_id: az-gpt-35-system
+  model_name: gpt-35-turbo-deployment
+  api_base: "https://your-resource.openai.azure.com/"
+  api_version: "2023-05-15"
+  allows_system_prompt: true
+
+# --- Embedding Models ---
+
+# 6. Basic Embedding Model Configuration
+#    - embedding_model: Set to `true` to register this as an embedding model.
+- model_id: az-text-embedding-small
+  embedding_model: true
+  model_name: text-embedding-3-small-deployment
+  api_base: "https://your-resource.openai.azure.com/"
+  api_version: "2023-05-14"
+
+# --- Custom API Key Configuration ---
+
+# 7. Models using a Custom API Key Alias or Environment Variable
+#    Useful for managing multiple Azure subscriptions or different sets of keys.
+#    - needs_key: The alias for the key (e.g., `llm keys set my-other-key`).
+#    - key_env_var: The environment variable name (e.g., `MY_AZURE_API_KEY`).
+- model_id: az-custom-key-chat
+  model_name: custom-chat-deployment
+  api_base: "https://your-other-resource.openai.azure.com/"
+  api_version: "2023-05-15"
+  needs_key: my-other-azure-key
+  key_env_var: MY_AZURE_API_KEY
+
+- model_id: az-custom-key-embedding
+  embedding_model: true
+  model_name: custom-embedding-deployment
+  api_base: "https://your-other-resource.openai.azure.com/"
+  api_version: "2023-05-14"
+  needs_key: my-other-azure-key
+  key_env_var: MY_AZURE_API_KEY
