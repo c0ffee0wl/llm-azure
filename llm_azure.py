@@ -9,6 +9,9 @@ from llm.default_plugins.openai_models import AsyncChat, Chat, _Shared, not_null
 from openai import AsyncAzureOpenAI, AzureOpenAI
 from llm.utils import remove_dict_none_values
 
+DEFAULT_KEY_ALIAS = "azure"
+DEFAULT_KEY_ENV_VAR = "AZURE_OPENAI_API_KEY"
+
 
 def _ensure_config_file():
     filepath = llm.user_dir() / "azure" / "config.yaml"
@@ -40,13 +43,15 @@ def register_models(register):
         if model.get('embedding_model'):
             continue
 
+        needs_key = model.get("needs_key", DEFAULT_KEY_ALIAS)
+        key_env_var = model.get("key_env_var", DEFAULT_KEY_ENV_VAR)
         aliases = model.pop("aliases", [])
         # Pass all relevant model parameters directly to AzureChat/AzureAsyncChat
         # This assumes the model dict contains 'model_id', 'model_name', 'api_base', 'api_version'
         # and optionally 'attachment_types', 'can_stream'.
         register(
-            AzureChat(**model),
-            AzureAsyncChat(**model),
+            AzureChat(needs_key=needs_key, key_env_var=key_env_var, **model),
+            AzureAsyncChat(needs_key=needs_key, key_env_var=key_env_var, **model),
             aliases=aliases,
         )
 
@@ -61,22 +66,21 @@ def register_embedding_models(register):
         if not model.get('embedding_model'):
             continue
 
+        needs_key = model.get("needs_key", DEFAULT_KEY_ALIAS)
+        key_env_var = model.get("key_env_var", DEFAULT_KEY_ENV_VAR)
         aliases = model.pop("aliases", [])
         model.pop('embedding_model') # Remove the flag before passing to constructor
 
         register(
-            AzureEmbedding(**model),
+            AzureEmbedding(needs_key=needs_key, key_env_var=key_env_var, **model),
             aliases=aliases,
         )
 
 
 class AzureShared(_Shared):
-    needs_key = "azure"
-    key_env_var = "AZURE_OPENAI_API_KEY"
-
-    def __init__(self, model_id, model_name, api_base, api_version, attachment_types=None, can_stream=True, **kwargs):
+    def __init__(self, model_id, model_name, api_base, api_version, attachment_types=None, can_stream=True, needs_key: str = DEFAULT_KEY_ALIAS, key_env_var: str = DEFAULT_KEY_ENV_VAR, **kwargs):
         # The base _Shared class expects model_id and possibly can_stream, and other kwargs
-        super().__init__(model_id=model_id, model_name=model_name, can_stream=can_stream, **kwargs)
+        super().__init__(model_id=model_id, model_name=model_name, can_stream=can_stream, needs_key=needs_key, key_env_var=key_env_var, **kwargs)
         self.api_base = api_base
         self.api_version = api_version
         self.attachment_types = attachment_types or set()
@@ -217,12 +221,10 @@ class AzureAsyncChat(AzureShared, AsyncChat):
 
 
 class AzureEmbedding(EmbeddingModel):
-    needs_key = "azure"
-    key_env_var = "AZURE_OPENAI_API_KEY"
     batch_size = 100
 
-    def __init__(self, model_id, model_name, api_base, api_version, **kwargs):
-        super().__init__(model_id=model_id, model_name=model_name, **kwargs) # Pass kwargs to base EmbeddingModel
+    def __init__(self, model_id, model_name, api_base, api_version, needs_key: str = DEFAULT_KEY_ALIAS, key_env_var: str = DEFAULT_KEY_ENV_VAR, **kwargs):
+        super().__init__(model_id=model_id, model_name=model_name, needs_key=needs_key, key_env_var=key_env_var, **kwargs)
         self.api_base = api_base
         self.api_version = api_version
 
