@@ -66,3 +66,15 @@ To enable the `-a` flag, simply add an `attachment_types` section to your `confi
   - "image/png"
   - "image/jpeg"
 ```
+
+### Streaming
+
+For models that can stream, add `can_stream`
+
+```yaml
+- model_id: gpt-4-32k
+  model_name: gpt-4-32k
+  api_base: https://your_deployment.openai.azure.com/
+  api_version: '2023-05-15'
+  can_stream: true
+```
