@@ -45,10 +45,14 @@ def register_models(register):
 
         needs_key = model.get("needs_key", DEFAULT_KEY_ALIAS)
         key_env_var = model.get("key_env_var", DEFAULT_KEY_ENV_VAR)
+        # The 'aliases' key is popped here to prevent it from being passed as a model parameter.
+        # Other new parameters (vision, audio, reasoning, allows_system_prompt) are left in
+        # the 'model' dictionary to be passed via **model to the AzureChat constructor.
         aliases = model.pop("aliases", [])
         # Pass all relevant model parameters directly to AzureChat/AzureAsyncChat
         # This assumes the model dict contains 'model_id', 'model_name', 'api_base', 'api_version'
-        # and optionally 'attachment_types', 'can_stream'.
+        # and optionally 'attachment_types', 'can_stream', and the new vision, audio, reasoning,
+        # and allows_system_prompt parameters.
         register(
             AzureChat(needs_key=needs_key, key_env_var=key_env_var, **model),
             AzureAsyncChat(needs_key=needs_key, key_env_var=key_env_var, **model),
@@ -78,9 +82,21 @@ def register_embedding_models(register):
 
 
 class AzureShared(_Shared):
-    def __init__(self, model_id, model_name, api_base, api_version, attachment_types=None, can_stream=True, needs_key: str = DEFAULT_KEY_ALIAS, key_env_var: str = DEFAULT_KEY_ENV_VAR, **kwargs):
-        # The base _Shared class expects model_id and possibly can_stream, and other kwargs
-        super().__init__(model_id=model_id, model_name=model_name, can_stream=can_stream, needs_key=needs_key, key_env_var=key_env_var, **kwargs)
+    def __init__(self, model_id, model_name, api_base, api_version, attachment_types=None, can_stream=True, needs_key: str = DEFAULT_KEY_ALIAS, key_env_var: str = DEFAULT_KEY_ENV_VAR, vision=False, audio=False, reasoning=False, allows_system_prompt=True, **kwargs):
+        # The base _Shared class expects model_id and possibly can_stream, and other kwargs.
+        # We now explicitly pass vision, audio, reasoning, and allows_system_prompt to the base class.
+        super().__init__(
+            model_id=model_id,
+            model_name=model_name,
+            can_stream=can_stream,
+            needs_key=needs_key,
+            key_env_var=key_env_var,
+            vision=vision,
+            audio=audio,
+            reasoning=reasoning,
+            allows_system_prompt=allows_system_prompt,
+            **kwargs
+        )
         self.api_base = api_base
         self.api_version = api_version
         self.attachment_types = attachment_types or set()
@@ -205,6 +221,8 @@ class AzureShared(_Shared):
 
 class AzureChat(AzureShared, Chat):
     def __init__(self, *args, **kwargs):
+        # AzureChat now correctly inherits from AzureShared, which handles the new parameters
+        # and passes them up to the base _Shared (and thus Chat) class.
         super().__init__(*args, **kwargs)
 
     def execute(self, prompt, stream, response, conversation=None):
@@ -213,6 +231,7 @@ class AzureChat(AzureShared, Chat):
 
 class AzureAsyncChat(AzureShared, AsyncChat):
     def __init__(self, *args, **kwargs):
+        # AzureAsyncChat also correctly inherits from AzureShared.
         super().__init__(*args, **kwargs)
 
     async def execute(self, prompt, stream, response, conversation=None):
@@ -259,3 +278,4 @@ def _attachment(attachment):
                 "format": format_,
             },
         }
+
